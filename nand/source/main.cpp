@@ -44,7 +44,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include "certs_bin.h"
 #include "hacks_hash_ini.h"
-#include "hacks_state_ini.h"
 #include "su_tik.h"
 #include "su_tmd.h"
 
@@ -380,19 +379,12 @@ static void write_file(std::string_view path, std::span<const u8> buffer)
   std::puts("  - Finished");
 }
 
-static void copy_priiloader_files_to_nand()
-{
-  write_file({"/title/00000001/00000002/data/hackshas.ini"},
-             std::span {hacks_hash_ini, hacks_hash_ini_size});
-  write_file({"/title/00000001/00000002/data/hacksh_s.ini"},
-             std::span {hacks_state_ini, hacks_state_ini_size});
-}
-
 int main()
 {
   try {
     init_subsystem();
-    copy_priiloader_files_to_nand();
+    write_file({"/title/00000001/00000002/data/hackshas.ini"},
+               std::span {hacks_hash_ini, hacks_hash_ini_size});
     sleepx(seconds {1});
   } catch (std::exception const& exception) {
     halt(exception.what());
