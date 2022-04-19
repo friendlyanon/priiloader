@@ -50,7 +50,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 using seconds = std::chrono::seconds;
 
-void sleepx(seconds secs)
+static void sleepx(seconds secs)
 {
   std::time_t start = std::time(nullptr);
   std::time_t end = std::time(nullptr);
@@ -75,12 +75,12 @@ void sleepx(seconds secs)
 }
 
 // libogc's write8 forces uncached memory addresses which do not work for mem2
-void cached_write8(u32 address, u8 value)
+static void cached_write8(u32 address, u8 value)
 {
   __asm__("stb %0,0(%1) ; eieio" : : "r"(value), "b"(address));
 }
 
-bool is_vwii_present()
+static bool is_vwii_present()
 {
   constexpr u64 vwii_nandloader_titleid = 0x00000001'00000200ULL;
   u32 status;
@@ -97,7 +97,7 @@ bool is_vwii_present()
 
 static u8 get_ios_version();
 
-bool patch_ios(bool ahbprot_only)
+static bool patch_ios(bool ahbprot_only)
 {
   // setuid : D1 2A 1C 39 -> 46 C0 1C 39
   static auto const setuid_old = std::to_array<u8>({0xD1, 0x2A, 0x1C, 0x39});
@@ -182,7 +182,7 @@ bool patch_ios(bool ahbprot_only)
 
 #define SYSMENU_TITLE_TMD_PATH "/title/00000001/00000002/content/title.tmd"
 
-bool is_nand_accessible()
+static bool is_nand_accessible()
 {
   if (s32 fd = ISFS_Open(SYSMENU_TITLE_TMD_PATH, ISFS_OPEN_RW); fd >= 0) {
     if (IOS_Close(fd) != IPC_OK) {
