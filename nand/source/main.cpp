@@ -54,7 +54,7 @@ static void sleepx(seconds secs)
 {
   std::time_t start = std::time(nullptr);
   std::time_t end = std::time(nullptr);
-  while (seconds(static_cast<u64>(std::difftime(end, start))) < secs) {
+  while (seconds {static_cast<u64>(std::difftime(end, start))} < secs) {
     std::time(&end);
     VIDEO_WaitVSync();
   }
@@ -64,7 +64,7 @@ static void sleepx(seconds secs)
 {
   std::puts(message);
   std::puts("\nExiting in 30 seconds...");
-  sleepx(seconds(30));
+  sleepx(seconds {30});
   VIDEO_WaitVSync();
   exit(0);
 }
@@ -393,7 +393,7 @@ int main()
   try {
     init_subsystem();
     copy_priiloader_files_to_nand();
-    sleepx(seconds(1));
+    sleepx(seconds {1});
   } catch (std::exception const& exception) {
     halt(exception.what());
   }
