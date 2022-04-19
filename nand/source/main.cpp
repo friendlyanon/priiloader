@@ -232,7 +232,7 @@ static void reload_ios(u8 ios)
   }
 }
 
-static void init_subsystem()
+static void init_subsystems()
 {
   bool has_dolphin = is_dolphin_present();
 
@@ -382,7 +382,7 @@ static void write_file(std::string_view path, std::span<const u8> buffer)
 int main()
 {
   try {
-    init_subsystem();
+    init_subsystems();
     write_file({"/title/00000001/00000002/data/hackshas.ini"},
                std::span {hacks_hash_ini, hacks_hash_ini_size});
     sleepx(seconds {1});
