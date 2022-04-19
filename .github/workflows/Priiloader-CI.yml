@@ -26,8 +26,13 @@ jobs:
         uses: actions/checkout@v1
         
       - name: Source Review
-        run: cppcheck . -v --std=c99 --std=c++11 --error-exitcode=1 --enable=warning,performance,portability,information,style --suppress=unusedFunction -UDEBUG_MEM2_LEVEL
+        # "nand" not checked, because it's written in C++20
+        run: >-
+          cppcheck Installer Shared loader priiloader tools
+          -v --std=c99 --std=c++11 --error-exitcode=1 --enable=warning,performance,portability,information,style --suppress=unusedFunction -UDEBUG_MEM2_LEVEL
 
       - name: Build
         run: |
+          mkdir nand/data
+          echo > nand/data/hacks_state.ini # dummy
           make
