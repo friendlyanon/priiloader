@@ -47,6 +47,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "su_tik.h"
 #include "su_tmd.h"
 
+using namespace std::literals::string_view_literals;
+
 using seconds = std::chrono::seconds;
 
 static void sleepx(seconds secs)
@@ -59,18 +61,34 @@ static void sleepx(seconds secs)
   }
 }
 
-[[noreturn]] static void halt(char const* message)
+static void print(std::string_view str)
 {
-  std::puts(message);
-  std::puts("\nExiting in 30 seconds...");
+  std::fwrite(str.data(), 1, str.size(), stdout);
+}
+
+static void println()
+{
+  std::fputc('\n', stdout);
+}
+
+static void println(std::string_view str)
+{
+  print(str);
+  println();
+}
+
+[[noreturn]] static void halt(std::string_view message)
+{
+  println(message);
+  println("\nExiting in 30 seconds..."sv);
   sleepx(seconds {30});
   VIDEO_WaitVSync();
   exit(0);
 }
 
-[[noreturn]] static void halt(std::string const& message)
+[[noreturn]] static void halt(char const* message)
 {
-  halt(message.c_str());
+  halt(std::string_view {message});
 }
 
 // libogc's write8 forces uncached memory addresses which do not work for mem2
@@ -117,7 +135,7 @@ static bool patch_ios(bool ahbprot_only)
       std::to_array<u8>({0x42, 0x8B, 0xD0, 0x01, 0x25, 0x66});
 
   if (read32(0x0d800064UL) != 0xFFFFFFFFUL && get_ios_version() != 36) {
-    halt("HW_AHBPROT is not set");
+    halt("HW_AHBPROT is not set"sv);
   }
 
   if (read16(0x0D8B420AUL) != 0) {
@@ -185,7 +203,7 @@ static bool is_nand_accessible()
 {
   if (s32 fd = ISFS_Open(SYSMENU_TITLE_TMD_PATH, ISFS_OPEN_RW); fd >= 0) {
     if (IOS_Close(fd) != IPC_OK) {
-      halt("Failed to close " SYSMENU_TITLE_TMD_PATH);
+      halt("Failed to close " SYSMENU_TITLE_TMD_PATH ""sv);
     }
 
     return true;
@@ -198,7 +216,7 @@ static bool is_dolphin_present()
 {
   if (s32 fd = IOS_Open("/dev/dolphin", IPC_OPEN_NONE); fd >= 0) {
     if (IOS_Close(fd) != IPC_OK) {
-      halt("Failed to close /dev/dolphin");
+      halt("Failed to close /dev/dolphin"sv);
     }
 
     return true;
@@ -211,7 +229,7 @@ static u8 get_ios_version()
 {
   s32 version = IOS_GetVersion();
   if (version == IOS_EBADVERSION) {
-    halt("Failed to determine the IOS version");
+    halt("Failed to determine the IOS version"sv);
   }
   return static_cast<u8>(version);
 }
@@ -220,7 +238,7 @@ static u16 get_ios_revision()
 {
   s32 revision = IOS_GetRevision();
   if (revision == IOS_EBADVERSION) {
-    halt("Failed to determine the IOS revision");
+    halt("Failed to determine the IOS revision"sv);
   }
   return static_cast<u16>(revision);
 }
@@ -280,7 +298,7 @@ static void init_subsystems()
     if (u16 revision = get_ios_revision();
         revision < 200 || revision > 0xFF01 || get_ios_version() != 36)
     {
-      halt("Infected IOS36 detected");
+      halt("Infected IOS36 detected"sv);
     }
   }
 
@@ -289,14 +307,14 @@ static void init_subsystems()
               static_cast<int>(get_ios_revision()));
 
   if (is_vwii_present()) {
-    halt("Error: vWii detected");
+    halt("Error: vWii detected"sv);
   }
 
   if (!has_dolphin && read32(0x0D800064UL) == 0xFFFFFFFFUL) {
     if (patch_ios(true)) {
       reload_ios(get_ios_version());
     } else {
-      halt("Failed to do AHBPROT magic");
+      halt("Failed to do AHBPROT magic"sv);
     }
   }
 
@@ -328,7 +346,7 @@ static void init_subsystems()
   }
 
   if (ISFS_Initialize() < 0) {
-    halt("Failed to init ISFS");
+    halt("Failed to init ISFS"sv);
   }
 
   if (is_nand_accessible()) {
@@ -342,48 +360,43 @@ static void init_subsystems()
     }
   }
 
-  halt("Failed to retrieve NAND permissions, IOS36 isn't patched");
-}
-
-static void print(std::string_view str)
-{
-  std::fwrite(str.data(), 1, str.size(), stdout);
+  halt("Failed to retrieve NAND permissions, IOS36 isn't patched"sv);
 }
 
 static void write_file(std::string_view path, std::span<const u8> buffer)
 {
-  std::fputc('\n', stdout);
+  println();
   print(path);
 
-  print({"\n  - Creating\n"});
+  println("\n  - Creating"sv);
   if (ISFS_CreateFile(path.data(), 0, 3, 3, 3) != ISFS_OK) {
-    halt("Failed to create");
+    halt("Failed to create"sv);
   }
 
-  std::puts("  - Opening");
+  println("  - Opening"sv);
   s32 fd = ISFS_Open(path.data(), 2);
   if (fd < 0) {
-    halt("Failed to open for writing");
+    halt("Failed to open for writing"sv);
   }
 
-  std::puts("  - Writing");
+  println("  - Writing"sv);
   s32 write_result = ISFS_Write(fd, buffer.data(), buffer.size());
   if (ISFS_Close(fd) < 0) {
-    halt("Failed to close");
+    halt("Failed to close"sv);
   }
 
   if (write_result < 0) {
-    halt("Failed to write");
+    halt("Failed to write"sv);
   }
 
-  std::puts("  - Finished");
+  println("  - Finished"sv);
 }
 
 int main()
 {
   try {
     init_subsystems();
-    write_file({"/title/00000001/00000002/data/hackshas.ini"},
+    write_file("/title/00000001/00000002/data/hackshas.ini"sv,
                std::span {hacks_hash_ini, hacks_hash_ini_size});
     sleepx(seconds {1});
   } catch (std::exception const& exception) {
