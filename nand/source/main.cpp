@@ -29,6 +29,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <span>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 #include <ogc/cache.h>
 #include <ogc/color.h>
@@ -55,7 +56,7 @@ static void sleepx(seconds secs)
 {
   std::time_t start = std::time(nullptr);
   std::time_t end = std::time(nullptr);
-  while (seconds {static_cast<u64>(std::difftime(end, start))} < secs) {
+  while (seconds {static_cast<s64>(std::difftime(end, start))} < secs) {
     std::time(&end);
     VIDEO_WaitVSync();
   }
@@ -112,6 +113,12 @@ static bool is_vwii_present()
   return true;
 }
 
+template<typename T, size_t Size>
+static bool is_block_equal(u32 block, std::array<T, Size> const& bytes)
+{
+  return std::memcmp(reinterpret_cast<void*>(block), bytes.data(), Size) == 0;
+}
+
 static u8 get_ios_version();
 
 static bool patch_ios(bool ahbprot_only)
@@ -144,50 +151,39 @@ static bool patch_ios(bool ahbprot_only)
 
   bool patches_applied = false;
   if (read16(0x0D8B420AUL) == 0) {
-    for (u8* mem_block = reinterpret_cast<u8*>(read32(0x80003130UL));
-         reinterpret_cast<u32>(mem_block) < 0x93FFFFFFUL;
-         ++mem_block)
+    for (u32 address = read32(0x80003130UL); address < 0x93FFFFFFUL; ++address)
     {
-      u32 address = reinterpret_cast<u32>(mem_block);
-
-      if (!ahbprot_only
-          && std::memcmp(mem_block, setuid_old.data(), setuid_old.size()) == 0)
-      {
+      if (!ahbprot_only && is_block_equal(address, setuid_old)) {
         cached_write8(address, 0x46);
         cached_write8(address + 1, 0xC0);
         patches_applied = true;
-        DCFlushRange(reinterpret_cast<u8*>((address) >> 5 << 5),
+        DCFlushRange(reinterpret_cast<void*>((address) >> 5 << 5),
                      (setuid_old.size() >> 5 << 5) + 64);
         continue;
       }
 
-      if (!ahbprot_only
-          && std::memcmp(
-                 mem_block, old_nand_table.data(), old_nand_table.size())
-              == 0)
-      {
+      if (!ahbprot_only && is_block_equal(address, old_nand_table)) {
         cached_write8(address + 2, 0xE0);
         cached_write8(address + 3, 0x01);
         patches_applied = true;
-        DCFlushRange(reinterpret_cast<u32*>(address), 64);
-        DCFlushRange(reinterpret_cast<u8*>((address) >> 5 << 5),
+        DCFlushRange(reinterpret_cast<void*>(address), 64);
+        DCFlushRange(reinterpret_cast<void*>((address) >> 5 << 5),
                      (old_nand_table.size() >> 5 << 5) + 64);
         continue;
       }
 
-      if (std::memcmp(mem_block, es_set_ahbprot.data(), es_set_ahbprot.size())
-          == 0) {
+      if (is_block_equal(address, es_set_ahbprot)) {
         // li r3, 0xFF.aka, make it look like the TMD had max settings
         cached_write8(address + 8, 0x23);
         cached_write8(address + 9, 0xFF);
         patches_applied = true;
-        DCFlushRange(reinterpret_cast<u8*>((address) >> 5 << 5),
+        DCFlushRange(reinterpret_cast<void*>((address) >> 5 << 5),
                      (es_set_ahbprot.size() >> 5 << 5) + 64);
-        ICInvalidateRange(reinterpret_cast<u8*>((address) >> 5 << 5),
+        ICInvalidateRange(reinterpret_cast<void*>((address) >> 5 << 5),
                           (es_set_ahbprot.size() >> 5 << 5) + 64);
         if (ahbprot_only) {
           write16(0x0D8B420AUL, 1);
-          return patches_applied;
+          return true;
         }
       }
     }
@@ -241,6 +237,12 @@ static u16 get_ios_revision()
     halt("Failed to determine the IOS revision"sv);
   }
   return static_cast<u16>(revision);
+}
+
+template<typename To, typename From>
+static To* c_ptr_cast(From* pointer)
+{
+  return reinterpret_cast<To*>(const_cast<std::remove_cv_t<From>*>(pointer));
 }
 
 static void reload_ios(u8 ios)
@@ -331,14 +333,13 @@ static void init_subsystems()
     ES_SetUID(0x00000001'00000002ULL);
   } else {
     u32 key_id = 0;
-    s32 result =
-        ES_Identify(reinterpret_cast<signed_blob*>(const_cast<u8*>(certs_bin)),
-                    certs_bin_size,
-                    reinterpret_cast<signed_blob*>(const_cast<u8*>(su_tmd)),
-                    su_tmd_size,
-                    reinterpret_cast<signed_blob*>(const_cast<u8*>(su_tik)),
-                    su_tik_size,
-                    &key_id);
+    s32 result = ES_Identify(c_ptr_cast<signed_blob>(certs_bin),
+                             certs_bin_size,
+                             c_ptr_cast<signed_blob>(su_tmd),
+                             su_tmd_size,
+                             c_ptr_cast<signed_blob>(su_tik),
+                             su_tik_size,
+                             &key_id);
     if (result < 0) {
       halt("IOS" + std::to_string(get_ios_version())
            + " isn't ES_Identify patched : error " + std::to_string(result));
