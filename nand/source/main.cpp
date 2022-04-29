@@ -119,9 +119,15 @@ static bool is_block_equal(u32 block, std::array<T, Size> const& bytes)
   return std::memcmp(reinterpret_cast<void*>(block), bytes.data(), Size) == 0;
 }
 
+enum class patch_mode : bool
+{
+  ahbprot_only,
+  all
+};
+
 static u8 get_ios_version();
 
-static bool patch_ios(bool ahbprot_only)
+static bool patch_ios(patch_mode mode)
 {
   // setuid : D1 2A 1C 39 -> 46 C0 1C 39
   static auto const setuid_old = std::to_array<u8>({0xD1, 0x2A, 0x1C, 0x39});
@@ -149,6 +155,7 @@ static bool patch_ios(bool ahbprot_only)
     write16(0x0D8B420AUL, 0);
   }
 
+  const bool ahbprot_only = mode == patch_mode::ahbprot_only;
   bool patches_applied = false;
   if (read16(0x0D8B420AUL) == 0) {
     for (u32 address = read32(0x80003130UL); address < 0x93FFFFFFUL; ++address)
@@ -313,7 +320,7 @@ static void init_subsystems()
   }
 
   if (!has_dolphin && read32(0x0D800064UL) == 0xFFFFFFFFUL) {
-    if (patch_ios(true)) {
+    if (patch_ios(patch_mode::ahbprot_only)) {
       reload_ios(get_ios_version());
     } else {
       halt("Failed to do AHBPROT magic"sv);
@@ -326,7 +333,7 @@ static void init_subsystems()
   }
 
   if (has_ahbprot && !has_dolphin) {
-    patch_ios(false);
+    patch_ios(patch_mode::all);
   }
 
   if (has_ahbprot) {
